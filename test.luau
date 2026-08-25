@@ -1,7 +1,7 @@
 --[[
-    FLING THE EXPLOITER
-    Simple script that just flings the player
-    No explosions, no effects, just pure flinging!
+    MOON LAUNCH FLING
+    Flings the exploiter SUPER high!
+    Like they're going to the moon!
 --]]
 
 local player = game.Players.LocalPlayer
@@ -9,11 +9,10 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local rootPart = character:WaitForChild("HumanoidRootPart")
 
--- Function to fling the character
-local function flingCharacter()
+local function moonLaunch()
     if not character or not humanoid or not rootPart then return end
     
-    -- Make sure parts can move
+    -- Remove gravity effects temporarily
     for _, part in pairs(character:GetChildren()) do
         if part:IsA("BasePart") then
             part.Anchored = false
@@ -21,52 +20,36 @@ local function flingCharacter()
         end
     end
     
-    -- Fling them in a random direction with random power
-    local flingPower = math.random(200, 500)
-    local direction = Vector3.new(
-        math.random(-1, 1),
-        math.random(0.5, 1.5),
-        math.random(-1, 1)
-    ).Unit
-    
-    -- Apply velocity to all parts
+    -- MEGA FLING STRAIGHT UP
+    local megaPower = 1000
     for _, part in pairs(character:GetChildren()) do
         if part:IsA("BasePart") then
-            part.Velocity = direction * flingPower
+            part.Velocity = Vector3.new(0, megaPower, 0)
             part.RotVelocity = Vector3.new(
-                math.random(-100, 100),
-                math.random(-100, 100),
-                math.random(-100, 100)
+                math.random(-200, 200),
+                math.random(-200, 200),
+                math.random(-200, 200)
             )
         end
     end
     
-    print("🚀 Exploiter has been flung!")
+    -- Disable platform stand so they actually fly
+    humanoid.PlatformStand = false
+    
+    print("🌙 Exploiter launched to the moon!")
 end
 
--- Execute fling
-flingCharacter()
+-- Execute
+moonLaunch()
 
--- Keep flinging them if they respawn
-local function onRespawn(newCharacter)
+-- Keep launching on respawn
+player.CharacterAdded:Connect(function(newCharacter)
     character = newCharacter
     humanoid = character:WaitForChild("Humanoid")
     rootPart = character:WaitForChild("HumanoidRootPart")
-    
-    -- Wait a moment then fling again
     task.wait(1)
-    flingCharacter()
-    
-    -- Keep flinging them every few seconds
-    while true do
-        task.wait(math.random(2, 5))
-        if character and humanoid and humanoid.Health > 0 then
-            flingCharacter()
-        end
-    end
-end
+    moonLaunch()
+end)
 
-player.CharacterAdded:Connect(onRespawn)
-
-print("✅ Fling script loaded!")
-print("🚀 Exploiter will keep getting flung!")
+print("✅ Moon launch loaded!")
+print("🌙 Exploiter is going to space!")
