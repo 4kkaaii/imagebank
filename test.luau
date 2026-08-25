@@ -3,18 +3,16 @@ local UILibrary = loadstring(game:HttpGet("https://pastebin.com/raw/aB72ENPP"))(
 local Window = UILibrary:CreateWindow({
     Title      = "[DUELS] Murderers VS Sheriffs",
     Subtitle   = "by Wounds",
-    Size       = UDim2.new(0, 550, 0, 450),
+    Size       = UDim2.new(0, 500, 0, 400),
     ToggleKey  = Enum.KeyCode.P,
     Theme      = "Purple",
     Image      = "rbxassetid://92882092628695",
 })
 
--- Main Tabs
 local GunTab = Window:CreateTab("Gun", "target")
-local ESPTab = Window:CreateTab("ESP", "eye")
-local SettingsTab = Window:CreateTab("UI Settings", "paint")
+local Tab3 = Window:CreateTab("UI Settings",  "paint")
+GunTab:CreateDivider("🔫  Only Gun")
 
--- Services
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -22,104 +20,182 @@ local Workspace = game:GetService("Workspace")
 local mouse = LocalPlayer:GetMouse()
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
-local HttpService = game:GetService("HttpService")
 
--- Global Settings
-local Settings = {
-    -- Aim Settings
-    SilentAimEnabled = false,
-    FOVRadius = 200,
-    FOVVisible = true,
-    AutoShootEnabled = false,
-    AutoShootFOVOnly = true,
-    FireDelay = 0.12,
-    Humanization = true,
-    Smoothness = 0.3,
-    
-    -- Anti-Cheat
-    AntiCheatBypass = true,
-    Randomization = true,
-    JitterAmount = 2,
-    
-    -- ESP Settings
-    ESPEnabled = false,
-    ESPBoxes = true,
-    ESPHealth = true,
-    ESPDistance = true,
-    ESPTracers = true,
-    ESPTeamColor = true,
-    
-    -- Colors
-    ESPBoxColor = Color3.fromRGB(255, 255, 255),
-    ESPTracerColor = Color3.fromRGB(255, 100, 100),
-}
-
--- FOV Circle
+-- FOV Circle Setup
 local FOVCircle = Drawing.new("Circle")
 FOVCircle.Thickness = 2
-FOVCircle.Radius = Settings.FOVRadius
+FOVCircle.Radius = 200
 FOVCircle.Color = Color3.fromRGB(255, 255, 255)
 FOVCircle.Transparency = 0.7
 FOVCircle.Visible = false
 FOVCircle.Filled = false
 
--- ESP Storage
-local ESPObjects = {}
-local function clearESP()
-    for _, obj in pairs(ESPObjects) do
-        if obj then
-            obj:Remove()
-        end
+-- Update FOV circle position
+local function updateFOVCircle()
+    if FOVCircle.Visible then
+        FOVCircle.Position = Vector2.new(mouse.X, mouse.Y + 36) -- Adjust for GUI inset
     end
-    ESPObjects = {}
 end
 
--- Helper Functions
-local function isInMatch()
+-- Update FOV circle on mouse move
+game:GetService("RunService").RenderStepped:Connect(function()
+    updateFOVCircle()
+end)
+
+-- Auto Shoot Settings
+local AutoShootSettings = {
+    Enabled = false,
+    FOVOnly = true,
+    FireDelay = 0.12,
+    MaxDistance = 150,
+    RequireVisible = true,
+    UsePrediction = false,
+    PredictionAmount = 0.5,
+}
+
+do
+local running = false
+local MAX_DISTANCE = 150
+local function inMatch()
     return LocalPlayer:GetAttribute("Map") ~= nil
 end
-
-local function getTeam(player)
-    return player:GetAttribute("Team")
-end
-
-local function getGame(player)
-    return player:GetAttribute("Game")
-end
-
-local function isEnemy(player)
-    return player ~= LocalPlayer 
-        and getTeam(player) ~= getTeam(LocalPlayer)
-        and getGame(player) == getGame(LocalPlayer)
-end
-
 local function getGunTool()
-    local character = LocalPlayer.Character
     local backpack = LocalPlayer:FindFirstChild("Backpack")
-    
-    if character then
-        for _, tool in ipairs(character:GetChildren()) do
-            if tool:IsA("Tool") and tool:FindFirstChild("showBeam") and tool:FindFirstChild("kill") then
-                return tool
-            end
-        end
-    end
-    
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and tool:FindFirstChild("showBeam") and tool:FindFirstChild("kill") then
+    if not backpack then return nil end
+    for _, tool in ipairs(backpack:GetChildren()) do
+        if tool:IsA("Tool") and tool:FindFirstChild("showBeam") then
+            local showBeam = tool.showBeam
+            if showBeam:IsA("RemoteEvent") then
                 return tool
             end
         end
     end
     return nil
 end
+local function equipGun()
+    if not inMatch() then
+        return
+    end
+    local character = LocalPlayer.Character
+    local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+    if not humanoid then
+        return
+    end
+    local tool = getGunTool()
+    if tool then
+        humanoid:EquipTool(tool)
+    end
+end
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if running and inMatch() then
+        equipGun()
+    end
+end)
+local function setupBackpackWatcher()
+    local backpack = LocalPlayer:WaitForChild("Backpack")
+    backpack.ChildAdded:Connect(function(child)
+        if running and inMatch() and child:IsA("Tool") then
+            task.wait(0.1)
+            equipGun()
+        end
+    end)
+end
+setupBackpackWatcher()
+local AKgun = GunTab:CreateToggle({
+    Text = "Auto Kill All Players",
+    Default = false,
+    Callback = function(state)
+        running = state
+        if running then
+            task.spawn(function()
+                while running do
+                    task.wait(0.1)
+                    if not inMatch() then
+                        continue
+                    end
+                    local character = LocalPlayer.Character
+                    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+                    if not rootPart then
+                        continue
+                    end
+                    local equippedTool = character:FindFirstChildOfClass("Tool")
+                    if not equippedTool or not equippedTool:FindFirstChild("showBeam") then
+                        equipGun()
+                    end
+                    local myTeam = LocalPlayer:GetAttribute("Team")
+                    local closestPlayer = nil
+                    local shortestDistance = MAX_DISTANCE
+                    for _, player in ipairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer then
+                            local playerTeam = player:GetAttribute("Team")
+                            if playerTeam ~= myTeam then
+                                local enemyCharacter = player.Character
+                                local enemyRoot = enemyCharacter and enemyCharacter:FindFirstChild("HumanoidRootPart")
+                                if enemyRoot then
+                                    local distance = (enemyRoot.Position - rootPart.Position).Magnitude
+                                    if distance <= MAX_DISTANCE and distance < shortestDistance then
+                                        shortestDistance = distance
+                                        closestPlayer = player
+                                    end
+                                end
+                            end
+                        end
+                    end
+                    local tool = character:FindFirstChildOfClass("Tool")
+                    if closestPlayer and tool then
+                        local killEvent = tool:FindFirstChild("kill")
+                        if killEvent and killEvent:IsA("RemoteEvent") then
+                            killEvent:FireServer(
+                                closestPlayer,
+                                Vector3.new(
+                                    0.149008110165596,
+                                    0.019326409325003624,
+                                    0.9886471033096313
+                                )
+                            )
+                        end
+                    end
+                end
+            end)
+        end
+    end
+})
+end
 
+do
+local enabled = false
+local MAX_DISTANCE = 150
+local FIRE_DELAY = 0.12
+local function getGunTool()
+    local character = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+    if character then
+        for _, tool in ipairs(character:GetChildren()) do
+            if tool:IsA("Tool")
+                and tool:FindFirstChild("showBeam")
+                and tool:FindFirstChild("kill") then
+                return tool
+            end
+        end
+    end
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool")
+                and tool:FindFirstChild("showBeam")
+                and tool:FindFirstChild("kill") then
+                return tool
+            end
+        end
+    end
+    return nil
+end
 local function equipGun()
     local character = LocalPlayer.Character
     local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-    if not humanoid or not isInMatch() then return nil end
-    
+    if not humanoid then
+        return nil
+    end
     local tool = getGunTool()
     if tool and tool.Parent ~= character then
         humanoid:EquipTool(tool)
@@ -127,48 +203,66 @@ local function equipGun()
     end
     return tool
 end
-
 local function canSeeTarget(targetCharacter)
     local myCharacter = LocalPlayer.Character
-    if not myCharacter then return false end
-    
+    if not myCharacter then
+        return false
+    end
     local myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
     local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
-    if not myRoot or not targetRoot then return false end
-    
+    if not myRoot or not targetRoot then
+        return false
+    end
     local params = RaycastParams.new()
     params.FilterType = Enum.RaycastFilterType.Exclude
-    params.FilterDescendantsInstances = {myCharacter, targetCharacter}
-    
-    local result = Workspace:Raycast(myRoot.Position, targetRoot.Position - myRoot.Position, params)
+    params.FilterDescendantsInstances = {
+        myCharacter,
+        targetCharacter
+    }
+    local result = Workspace:Raycast(
+        myRoot.Position,
+        targetRoot.Position - myRoot.Position,
+        params
+    )
     return result == nil
 end
-
-local function getClosestPlayerToCursor(useFOV)
-    if not isInMatch() then return nil end
-    
+local function getClosestPlayerToCursor()
+    if not AutoShootSettings.Enabled then
+        return nil
+    end
+    if not LocalPlayer:GetAttribute("Map") then
+        return nil
+    end
     local myCharacter = LocalPlayer.Character
     local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-    
+    if not myRoot then
+        return nil
+    end
+    local myTeam = LocalPlayer:GetAttribute("Team")
+    local myGame = LocalPlayer:GetAttribute("Game")
     local mousePos = Vector2.new(mouse.X, mouse.Y)
     local closestPlayer = nil
-    local shortestDistance = useFOV and Settings.FOVRadius or math.huge
+    local shortestDistance = AutoShootSettings.FOVOnly and 200 or math.huge
     
     for _, player in ipairs(Players:GetPlayers()) do
-        if isEnemy(player) then
+        if player ~= LocalPlayer then
             local character = player.Character
             local humanoid = character and character:FindFirstChildOfClass("Humanoid")
             local root = character and character:FindFirstChild("HumanoidRootPart")
-            
-            if humanoid and humanoid.Health > 0 and root and canSeeTarget(character) then
+            if humanoid
+                and humanoid.Health > 0
+                and root
+                and player:GetAttribute("Game") == myGame
+                and player:GetAttribute("Team") ~= myTeam then
                 local worldDistance = (root.Position - myRoot.Position).Magnitude
-                if worldDistance <= 150 then
+                if worldDistance <= AutoShootSettings.MaxDistance
+                    and (not AutoShootSettings.RequireVisible or canSeeTarget(character)) then
                     local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
                     if onScreen then
-                        local screenDistance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
-                        if (not useFOV or screenDistance <= Settings.FOVRadius) and screenDistance < shortestDistance then
-                            shortestDistance = screenDistance
+                        local cursorDistance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                        if (not AutoShootSettings.FOVOnly or cursorDistance <= 200) 
+                            and cursorDistance < shortestDistance then
+                            shortestDistance = cursorDistance
                             closestPlayer = player
                         end
                     end
@@ -176,280 +270,99 @@ local function getClosestPlayerToCursor(useFOV)
             end
         end
     end
-    
     return closestPlayer
 end
-
--- Humanization Functions
-local function getHumanizedPosition(targetRoot)
-    if not Settings.Humanization then
-        return targetRoot.Position
-    end
-    
-    local randomOffset = Vector3.new(
-        math.random(-100, 100) / 100 * 0.5,
-        math.random(-100, 100) / 100 * 0.5,
-        math.random(-100, 100) / 100 * 0.5
-    )
-    
-    return targetRoot.Position + randomOffset
-end
-
-local function getRandomizedDelay()
-    if not Settings.Randomization then
-        return Settings.FireDelay
-    end
-    
-    local randomFactor = math.random(70, 130) / 100
-    return Settings.FireDelay * randomFactor
-end
-
--- ESP Functions
-local function createESP(player)
-    if ESPObjects[player.UserId] then
-        return
-    end
-    
-    local espObjects = {}
-    
-    -- Box ESP
-    if Settings.ESPBoxes then
-        local box = Drawing.new("Square")
-        box.Thickness = 2
-        box.Color = Settings.ESPBoxColor
-        box.Transparency = 0.8
-        box.Filled = false
-        box.Visible = false
-        espObjects.Box = box
-    end
-    
-    -- Health Bar
-    if Settings.ESPHealth then
-        local healthBar = Drawing.new("Line")
-        healthBar.Thickness = 3
-        healthBar.Color = Color3.fromRGB(0, 255, 0)
-        healthBar.Visible = false
-        espObjects.HealthBar = healthBar
-    end
-    
-    -- Distance Text
-    if Settings.ESPDistance then
-        local distanceText = Drawing.new("Text")
-        distanceText.Size = 14
-        distanceText.Color = Color3.fromRGB(255, 255, 255)
-        distanceText.Center = true
-        distanceText.Outline = true
-        distanceText.Visible = false
-        espObjects.DistanceText = distanceText
-    end
-    
-    -- Tracer
-    if Settings.ESPTracers then
-        local tracer = Drawing.new("Line")
-        tracer.Thickness = 1
-        tracer.Color = Settings.ESPTracerColor
-        tracer.Transparency = 0.7
-        tracer.Visible = false
-        espObjects.Tracer = tracer
-    end
-    
-    ESPObjects[player.UserId] = espObjects
-end
-
-local function updateESP()
-    if not Settings.ESPEnabled then
-        for _, espObj in pairs(ESPObjects) do
-            for _, drawing in pairs(espObj) do
-                drawing.Visible = false
-            end
-        end
-        return
-    end
-    
-    local myCharacter = LocalPlayer.Character
-    local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
-    
-    for _, player in ipairs(Players:GetPlayers()) do
-        if isEnemy(player) then
-            local character = player.Character
-            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
-            local root = character and character:FindFirstChild("HumanoidRootPart")
-            
-            if humanoid and humanoid.Health > 0 and root then
-                createESP(player)
-                local espObj = ESPObjects[player.UserId]
+local oldIndex
+oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+    if AutoShootSettings.Enabled
+        and not checkcaller()
+        and self == mouse
+        and key == "Hit" then
+        local target = getClosestPlayerToCursor()
+        if target then
+            local root = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                local targetPos = root.Position
                 
-                local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
-                
-                if onScreen and myRoot then
-                    local distance = (root.Position - myRoot.Position).Magnitude
-                    
-                    -- Update Box
-                    if espObj.Box then
-                        local scale = 2000 / (Camera.CFrame.Position - root.Position).Magnitude
-                        local boxSize = Vector2.new(50 * scale, 70 * scale)
-                        espObj.Box.Size = boxSize
-                        espObj.Box.Position = Vector2.new(screenPos.X - boxSize.X/2, screenPos.Y - boxSize.Y/2)
-                        espObj.Box.Visible = true
-                        
-                        if Settings.ESPTeamColor and player:GetAttribute("Team") then
-                            espObj.Box.Color = player:GetAttribute("Team") == "Sheriff" 
-                                and Color3.fromRGB(100, 150, 255) 
-                                or Color3.fromRGB(255, 100, 100)
-                        end
-                    end
-                    
-                    -- Update Health Bar
-                    if espObj.HealthBar then
-                        local healthPercent = humanoid.Health / humanoid.MaxHealth
-                        local barWidth = 50
-                        local barHeight = 4
-                        local barX = screenPos.X - barWidth/2
-                        local barY = screenPos.Y - 40
-                        
-                        espObj.HealthBar.From = Vector2.new(barX, barY)
-                        espObj.HealthBar.To = Vector2.new(barX + barWidth * healthPercent, barY)
-                        espObj.HealthBar.Color = healthPercent > 0.5 
-                            and Color3.fromRGB(0, 255, 0) 
-                            or (healthPercent > 0.25 
-                                and Color3.fromRGB(255, 255, 0) 
-                                or Color3.fromRGB(255, 0, 0))
-                        espObj.HealthBar.Visible = true
-                    end
-                    
-                    -- Update Distance Text
-                    if espObj.DistanceText then
-                        espObj.DistanceText.Text = string.format("%.0fm", distance)
-                        espObj.DistanceText.Position = Vector2.new(screenPos.X, screenPos.Y + 40)
-                        espObj.DistanceText.Visible = true
-                    end
-                    
-                    -- Update Tracer
-                    if espObj.Tracer and myRoot then
-                        local myScreenPos = Camera:WorldToViewportPoint(myRoot.Position)
-                        espObj.Tracer.From = Vector2.new(myScreenPos.X, myScreenPos.Y)
-                        espObj.Tracer.To = Vector2.new(screenPos.X, screenPos.Y)
-                        espObj.Tracer.Visible = true
-                    end
-                else
-                    for _, drawing in pairs(espObj) do
-                        drawing.Visible = false
-                    end
+                -- Add prediction if enabled
+                if AutoShootSettings.UsePrediction and target.Character:FindFirstChildOfClass("Humanoid") then
+                    local velocity = target.Character:FindFirstChildOfClass("Humanoid").MoveDirection
+                    targetPos = targetPos + velocity * AutoShootSettings.PredictionAmount
                 end
+                
+                return CFrame.new(targetPos)
             end
         end
     end
-end
-
--- Anti-Cheat Bypass
-local function fireWithAntiCheat(tool, target, direction)
-    if not Settings.AntiCheatBypass then
-        tool:Activate()
-        return
+    return oldIndex(self, key)
+end))
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if AutoShootSettings.Enabled then
+        equipGun()
     end
-    
-    -- Add slight delay randomization
-    task.wait(math.random(1, 5) / 100)
-    
-    -- Add slight aim jitter
-    if Settings.JitterAmount > 0 then
-        local jitter = Settings.JitterAmount / 100
-        direction = direction + Vector3.new(
-            math.random(-jitter, jitter),
-            math.random(-jitter, jitter),
-            math.random(-jitter, jitter)
-        )
-    end
-    
-    -- Fire the weapon
-    tool:Activate()
-end
-
--- ──────────────────────────────────────────────
--- GUN TAB
--- ──────────────────────────────────────────────
-GunTab:CreateDivider("🔫 Gun Features")
-
--- Auto Kill
-do
-local running = false
-local MAX_DISTANCE = 150
-
-local function autoKillLoop()
-    while running do
+end)
+local backpack = LocalPlayer:WaitForChild("Backpack")
+backpack.ChildAdded:Connect(function(child)
+    if AutoShootSettings.Enabled and child:IsA("Tool") then
         task.wait(0.1)
-        if not isInMatch() then continue end
-        
-        local character = LocalPlayer.Character
-        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-        if not rootPart then continue end
-        
-        local equippedTool = character:FindFirstChildOfClass("Tool")
-        if not equippedTool or not equippedTool:FindFirstChild("showBeam") then
-            equipGun()
+        equipGun()
+    end
+end)
+task.spawn(function()
+    while true do
+        task.wait(AutoShootSettings.FireDelay)
+        if not AutoShootSettings.Enabled then
+            continue
         end
-        
-        local myTeam = getTeam(LocalPlayer)
-        local closestPlayer = nil
-        local shortestDistance = MAX_DISTANCE
-        
-        for _, player in ipairs(Players:GetPlayers()) do
-            if isEnemy(player) then
-                local enemyCharacter = player.Character
-                local enemyRoot = enemyCharacter and enemyCharacter:FindFirstChild("HumanoidRootPart")
-                if enemyRoot then
-                    local distance = (enemyRoot.Position - rootPart.Position).Magnitude
-                    if distance <= MAX_DISTANCE and distance < shortestDistance then
-                        shortestDistance = distance
-                        closestPlayer = player
-                    end
-                end
-            end
+        if not LocalPlayer:GetAttribute("Map") then
+            continue
         end
-        
-        local tool = character:FindFirstChildOfClass("Tool")
-        if closestPlayer and tool then
-            local killEvent = tool:FindFirstChild("kill")
-            if killEvent and killEvent:IsA("RemoteEvent") then
-                killEvent:FireServer(closestPlayer, Vector3.new(0.149008110165596, 0.019326409325003624, 0.9886471033096313))
+        local target = getClosestPlayerToCursor()
+        if target then
+            local tool = equipGun()
+            if tool and tool.Parent == LocalPlayer.Character then
+                tool:Activate()
             end
         end
     end
-end
+end)
 
-GunTab:CreateToggle({
-    Text = "Auto Kill All Players",
-    Default = false,
-    Callback = function(state)
-        running = state
-        if running then
-            task.spawn(autoKillLoop)
-        end
-    end
-})
-end
+-- Auto Shoot UI
+GunTab:CreateDivider("🎯 Auto Shoot Settings")
 
--- Auto Shoot
-do
-local enabled = false
-local lastFire = 0
-
-GunTab:CreateToggle({
+local AKWVgun = GunTab:CreateToggle({
     Text = "Auto Shoot When Visible",
     Default = false,
     Callback = function(state)
-        enabled = state
-        if enabled then
+        AutoShootSettings.Enabled = state
+        if state then
             equipGun()
         end
     end
 })
 
 GunTab:CreateToggle({
-    Text = "Auto Shoot FOV Only",
+    Text = "FOV Only Mode",
     Default = true,
     Callback = function(state)
-        Settings.AutoShootFOVOnly = state
+        AutoShootSettings.FOVOnly = state
+    end
+})
+
+GunTab:CreateToggle({
+    Text = "Require Line of Sight",
+    Default = true,
+    Callback = function(state)
+        AutoShootSettings.RequireVisible = state
+    end
+})
+
+GunTab:CreateToggle({
+    Text = "Use Prediction",
+    Default = false,
+    Callback = function(state)
+        AutoShootSettings.UsePrediction = state
     end
 })
 
@@ -459,37 +372,99 @@ GunTab:CreateSlider({
     Max = 0.5,
     Default = 0.12,
     Callback = function(value)
-        Settings.FireDelay = value
+        AutoShootSettings.FireDelay = value
     end
 })
 
-task.spawn(function()
-    while true do
-        task.wait(0.01)
-        if not enabled or not isInMatch() then continue end
-        
-        local currentTime = tick()
-        if currentTime - lastFire < getRandomizedDelay() then continue end
-        
-        local target = getClosestPlayerToCursor(Settings.AutoShootFOVOnly)
-        if target then
-            local tool = equipGun()
-            if tool and tool.Parent == LocalPlayer.Character then
-                fireWithAntiCheat(tool, target, Vector3.new(0, 0, 0))
-                lastFire = currentTime
+GunTab:CreateSlider({
+    Text = "Max Distance",
+    Min = 50,
+    Max = 500,
+    Default = 150,
+    Callback = function(value)
+        AutoShootSettings.MaxDistance = value
+    end
+})
+
+GunTab:CreateSlider({
+    Text = "Prediction Amount",
+    Min = 0,
+    Max = 2,
+    Default = 0.5,
+    Callback = function(value)
+        AutoShootSettings.PredictionAmount = value
+    end
+})
+end
+
+do
+local MAX_DISTANCE = 150
+local enabled = false
+local FOV_RADIUS = 200
+local FOVVisible = false
+
+local function getClosestPlayerToCursor()
+    if not enabled then
+        return nil
+    end
+    if not LocalPlayer:GetAttribute("Map") then
+        return nil
+    end
+    local myCharacter = LocalPlayer.Character
+    local myRoot = myCharacter and myCharacter:FindFirstChild("HumanoidRootPart")
+    if not myRoot then
+        return nil
+    end
+    local mousePos = Vector2.new(mouse.X, mouse.Y)
+    local myTeam = LocalPlayer:GetAttribute("Team")
+    local myGame = LocalPlayer:GetAttribute("Game")
+    local closestPlayer = nil
+    local shortestDistance = FOV_RADIUS
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            local character = player.Character
+            local root = character and character:FindFirstChild("HumanoidRootPart")
+            if root
+            and player:GetAttribute("Game") == myGame
+            and player:GetAttribute("Team") ~= myTeam then
+                local worldDistance = (root.Position - myRoot.Position).Magnitude
+                if worldDistance <= MAX_DISTANCE then
+                    local screenPos, onScreen = Camera:WorldToViewportPoint(root.Position)
+                    if onScreen then
+                        local screenDistance = (Vector2.new(screenPos.X, screenPos.Y) - mousePos).Magnitude
+                        if screenDistance <= FOV_RADIUS and screenDistance < shortestDistance then
+                            shortestDistance = screenDistance
+                            closestPlayer = player
+                        end
+                    end
+                end
             end
         end
     end
-end)
+    return closestPlayer
 end
 
--- Silent Aim
-do
-local enabled = false
+local oldIndex
+oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
+    if enabled
+    and not checkcaller()
+    and self == mouse
+    and key == "Hit" then
+        local target = getClosestPlayerToCursor()
+        if target then
+            local root = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                return CFrame.new(root.Position)
+            end
+        end
+    end
+    return oldIndex(self, key)
+end))
 
-GunTab:CreateDivider("🎯 Silent Aim")
+GunTab:CreateDivider("🎯 Silent Aim Settings")
 
-GunTab:CreateToggle({
+local SAgun = GunTab:CreateToggle({
     Text = "Silent Aim",
     Default = false,
     Callback = function(state)
@@ -499,9 +474,10 @@ GunTab:CreateToggle({
 
 GunTab:CreateToggle({
     Text = "Show FOV Circle",
-    Default = true,
+    Default = false,
     Callback = function(state)
-        Settings.FOVVisible = state
+        FOVVisible = state
+        FOVCircle.Visible = state and enabled
     end
 })
 
@@ -511,201 +487,74 @@ GunTab:CreateSlider({
     Max = 500,
     Default = 200,
     Callback = function(value)
-        Settings.FOVRadius = value
+        FOV_RADIUS = value
         FOVCircle.Radius = value
     end
 })
 
-GunTab:CreateDivider("🎯 Humanization")
+-- FOV Circle Customization
+GunTab:CreateDivider("🎨 FOV Circle Customization")
 
-GunTab:CreateToggle({
-    Text = "Humanization",
-    Default = true,
-    Callback = function(state)
-        Settings.Humanization = state
+GunTab:CreateColorPicker({
+    Text = "FOV Circle Color",
+    Default = Color3.fromRGB(255, 255, 255),
+    Callback = function(color)
+        FOVCircle.Color = color
     end
 })
 
 GunTab:CreateSlider({
-    Text = "Smoothness",
-    Min = 0.1,
-    Max = 1,
-    Default = 0.3,
-    Callback = function(value)
-        Settings.Smoothness = value
-    end
-})
-
-GunTab:CreateDivider("🛡️ Anti-Cheat")
-
-GunTab:CreateToggle({
-    Text = "Anti-Cheat Bypass",
-    Default = true,
-    Callback = function(state)
-        Settings.AntiCheatBypass = state
-    end
-})
-
-GunTab:CreateToggle({
-    Text = "Randomization",
-    Default = true,
-    Callback = function(state)
-        Settings.Randomization = state
-    end
-})
-
-GunTab:CreateSlider({
-    Text = "Jitter Amount",
-    Min = 0,
+    Text = "FOV Circle Thickness",
+    Min = 1,
     Max = 10,
     Default = 2,
     Callback = function(value)
-        Settings.JitterAmount = value
+        FOVCircle.Thickness = value
     end
 })
 
-local oldIndex
-oldIndex = hookmetamethod(game, "__index", newcclosure(function(self, key)
-    if enabled and not checkcaller() and self == mouse and key == "Hit" then
-        local target = getClosestPlayerToCursor(true)
-        if target then
-            local root = target.Character and target.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                local targetPos = getHumanizedPosition(root)
-                return CFrame.new(targetPos)
-            end
-        end
+GunTab:CreateSlider({
+    Text = "FOV Circle Transparency",
+    Min = 0,
+    Max = 1,
+    Default = 0.7,
+    Callback = function(value)
+        FOVCircle.Transparency = value
     end
-    return oldIndex(self, key)
-end))
-end
+})
 
--- ──────────────────────────────────────────────
--- ESP TAB
--- ──────────────────────────────────────────────
-ESPTab:CreateDivider("👁️ ESP Features")
-
-ESPTab:CreateToggle({
-    Text = "Enable ESP",
+GunTab:CreateToggle({
+    Text = "Filled Circle",
     Default = false,
     Callback = function(state)
-        Settings.ESPEnabled = state
-        if not state then
-            clearESP()
-        end
+        FOVCircle.Filled = state
     end
 })
 
-ESPTab:CreateToggle({
-    Text = "Box ESP",
-    Default = true,
-    Callback = function(state)
-        Settings.ESPBoxes = state
-        clearESP()
-    end
-})
-
-ESPTab:CreateToggle({
-    Text = "Health Bars",
-    Default = true,
-    Callback = function(state)
-        Settings.ESPHealth = state
-        clearESP()
-    end
-})
-
-ESPTab:CreateToggle({
-    Text = "Distance",
-    Default = true,
-    Callback = function(state)
-        Settings.ESPDistance = state
-        clearESP()
-    end
-})
-
-ESPTab:CreateToggle({
-    Text = "Tracers",
-    Default = true,
-    Callback = function(state)
-        Settings.ESPTracers = state
-        clearESP()
-    end
-})
-
-ESPTab:CreateToggle({
-    Text = "Team Colors",
-    Default = true,
-    Callback = function(state)
-        Settings.ESPTeamColor = state
-    end
-})
-
--- ──────────────────────────────────────────────
--- UI SETTINGS TAB
--- ──────────────────────────────────────────────
-SettingsTab:CreateDivider("🎨 Theme")
-
-SettingsTab:CreateDropdown({
-    Text     = "UI Theme",
-    Options  = { "Default", "Red", "Green", "Purple", "Cyan", "Blue", "Pink", "Yellow", "Teal", "Magenta", "Orange", "Rose", "Gold" },
-    Default  = "Purple",
-    Callback = function(theme) Window:SetTheme(theme) end,
-})
-
-SettingsTab:CreateDivider("⌨️ Keybinds")
-
-SettingsTab:CreateKeybind({
-    Text     = "Toggle UI",
-    Default  = Enum.KeyCode.P,
-    Callback = function(key) Window:SetToggleKey(key) end,
-})
-
-SettingsTab:CreateKeybind({
-    Text     = "Panic Key (Disable All)",
-    Default  = Enum.KeyCode.RightShift,
-    Callback = function(key)
-        -- Disable all features
-        enabled = false
-        Settings.SilentAimEnabled = false
-        Settings.ESPEnabled = false
-        FOVCircle.Visible = false
-        clearESP()
-    end,
-})
-
--- ──────────────────────────────────────────────
--- MAIN LOOPS
--- ──────────────────────────────────────────────
-
--- Update FOV Circle
+-- Update FOV circle position and visibility
 RunService.RenderStepped:Connect(function()
-    if Settings.FOVVisible and Settings.SilentAimEnabled then
+    if FOVVisible and enabled then
         FOVCircle.Position = Vector2.new(mouse.X, mouse.Y + 36)
         FOVCircle.Visible = true
     else
         FOVCircle.Visible = false
     end
 end)
+end
 
--- Update ESP
-RunService.RenderStepped:Connect(function()
-    if Settings.ESPEnabled then
-        updateESP()
-    end
-end)
-
--- Clean up on character added
-LocalPlayer.CharacterAdded:Connect(function()
-    task.wait(1)
-    if Settings.AutoShootEnabled then
-        equipGun()
-    end
-end)
-
--- Initial notification
-task.spawn(function()
-    task.wait(2)
-    print("[DUELS] Script loaded successfully!")
-    print("[DUELS] Press P to toggle UI")
-    print("[DUELS] Press RightShift for panic mode")
-end)
+-- ══════════════════════════════════════════════
+--  UI SETTINGS TAB
+-- ══════════════════════════════════════════════
+Tab3:CreateDivider("Theme")
+Tab3:CreateDropdown({
+    Text     = "UI Theme",
+    Options  = { "Default", "Red", "Green", "Purple", "Cyan", "Blue", "Pink", "Yellow", "Teal", "Magenta", "Orange", "Rose", "Gold" },
+    Default  = "Teal",
+    Callback = function(theme) Window:SetTheme(theme) end,
+})
+Tab3:CreateDivider("UI")
+Tab3:CreateKeybind({
+    Text     = "Toggle UI",
+    Default  = Enum.KeyCode.P,
+    Callback = function(key) Window:SetToggleKey(key) end,
+})
