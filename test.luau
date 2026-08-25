@@ -1,181 +1,437 @@
 --[[
-    FAKE SILENT AIM
-    Makes bullets miss every target
-    Looks like a real silent aim GUI
-    Actually makes you worse at aiming!
+    MODERN FAKE SILENT AIM
+    Premium-looking silent aim GUI
+    Actually makes bullets miss
+    J to toggle GUI visibility
+    Switch inside GUI to toggle aimbot
+    Persists through respawns
 --]]
 
 local player = game.Players.LocalPlayer
-local mouse = player:GetMouse()
+local userInputService = game:GetService("UserInputService")
+local runService = game:GetService("RunService")
 
--- Variables
-local isFakeAimEnabled = false
-local target = nil
-local lastHitTime = 0
+-- Settings
+local isEnabled = false
+local isGUIVisible = true
+local GUI_TOGGLE_KEY = Enum.KeyCode.J
+local aimbotSwitch = nil
 
--- Create GUI
-local function createGUI()
+-- Create modern GUI
+local function createModernGUI()
     local screenGui = Instance.new("ScreenGui")
-    screenGui.Name = "FakeSilentAim"
+    screenGui.Name = "SilentAimPremium"
+    screenGui.ResetOnSpawn = false -- Persists through respawns!
     screenGui.Parent = player.PlayerGui
     
-    -- Main frame
+    -- Main container
     local mainFrame = Instance.new("Frame")
-    mainFrame.Size = UDim2.new(0, 300, 0, 400)
-    mainFrame.Position = UDim2.new(0.5, -150, 0.5, -200)
-    mainFrame.BackgroundColor3 = Color3.fromRGB(10, 10, 20)
-    mainFrame.BackgroundTransparency = 0.1
-    mainFrame.BorderSizePixel = 2
-    mainFrame.BorderColor3 = Color3.fromRGB(0, 200, 255)
+    mainFrame.Size = UDim2.new(0, 340, 0, 460)
+    mainFrame.Position = UDim2.new(0.5, -170, 0.5, -230)
+    mainFrame.BackgroundColor3 = Color3.fromRGB(12, 12, 22)
+    mainFrame.BackgroundTransparency = 0.05
+    mainFrame.BorderSizePixel = 0
+    mainFrame.ClipsDescendants = true
     mainFrame.Parent = screenGui
     
-    -- Title
+    -- Modern glass effect (border glow)
+    local glowBorder = Instance.new("Frame")
+    glowBorder.Size = UDim2.new(1, 4, 1, 4)
+    glowBorder.Position = UDim2.new(0, -2, 0, -2)
+    glowBorder.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
+    glowBorder.BackgroundTransparency = 0.8
+    glowBorder.BorderSizePixel = 0
+    glowBorder.Parent = mainFrame
+    
+    -- Shadow
+    local shadow = Instance.new("Frame")
+    shadow.Size = UDim2.new(1, 30, 1, 30)
+    shadow.Position = UDim2.new(0, -15, 0, -15)
+    shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    shadow.BackgroundTransparency = 0.6
+    shadow.BorderSizePixel = 0
+    shadow.Parent = mainFrame
+    
+    -- Gradient header with accent
+    local header = Instance.new("Frame")
+    header.Size = UDim2.new(1, 0, 0, 65)
+    header.BackgroundColor3 = Color3.fromRGB(25, 25, 45)
+    header.BorderSizePixel = 0
+    header.Parent = mainFrame
+    
+    -- Accent line
+    local accentLine = Instance.new("Frame")
+    accentLine.Size = UDim2.new(0.3, 0, 0, 2)
+    accentLine.Position = UDim2.new(0.35, 0, 1, -2)
+    accentLine.BackgroundColor3 = Color3.fromRGB(0, 200, 255)
+    accentLine.BorderSizePixel = 0
+    accentLine.Parent = header
+    
+    -- Title with icon
     local title = Instance.new("TextLabel")
-    title.Size = UDim2.new(1, 0, 0, 40)
-    title.Position = UDim2.new(0, 0, 0, -40)
+    title.Size = UDim2.new(1, 0, 0, 30)
+    title.Position = UDim2.new(0, 0, 0, 8)
     title.BackgroundTransparency = 1
-    title.Text = "🎯 SILENT AIM v3.0 🎯"
+    title.Text = "◈ SILENT AIM ◈"
     title.TextColor3 = Color3.fromRGB(0, 200, 255)
     title.TextScaled = true
     title.Font = Enum.Font.GothamBold
-    title.Parent = mainFrame
+    title.Parent = header
     
-    -- Status
+    -- Subtitle
+    local subtitle = Instance.new("TextLabel")
+    subtitle.Size = UDim2.new(1, 0, 0, 20)
+    subtitle.Position = UDim2.new(0, 0, 0, 40)
+    subtitle.BackgroundTransparency = 1
+    subtitle.Text = "Premium Aimbot System v4.2"
+    subtitle.TextColor3 = Color3.fromRGB(140, 140, 170)
+    subtitle.TextScaled = true
+    subtitle.Font = Enum.Font.Gotham
+    subtitle.Parent = header
+    
+    -- Status section
+    local statusLabel = Instance.new("TextLabel")
+    statusLabel.Size = UDim2.new(0.4, 0, 0, 20)
+    statusLabel.Position = UDim2.new(0.05, 0, 0, 75)
+    statusLabel.BackgroundTransparency = 1
+    statusLabel.Text = "STATUS"
+    statusLabel.TextColor3 = Color3.fromRGB(140, 140, 170)
+    statusLabel.TextScaled = true
+    statusLabel.Font = Enum.Font.GothamBold
+    statusLabel.TextXAlignment = Enum.TextXAlignment.Left
+    statusLabel.Parent = mainFrame
+    
+    -- Status indicator (modern pill)
     local statusFrame = Instance.new("Frame")
-    statusFrame.Size = UDim2.new(0.9, 0, 0, 30)
-    statusFrame.Position = UDim2.new(0.05, 0, 0, 10)
-    statusFrame.BackgroundColor3 = Color3.fromRGB(0, 50, 0)
+    statusFrame.Size = UDim2.new(0.4, 0, 0, 35)
+    statusFrame.Position = UDim2.new(0.05, 0, 0, 95)
+    statusFrame.BackgroundColor3 = Color3.fromRGB(40, 10, 10)
+    statusFrame.BackgroundTransparency = 0.3
     statusFrame.BorderSizePixel = 1
-    statusFrame.BorderColor3 = Color3.fromRGB(0, 255, 0)
+    statusFrame.BorderColor3 = Color3.fromRGB(200, 50, 50)
     statusFrame.Parent = mainFrame
     
+    -- Status dot
+    local statusDot = Instance.new("Frame")
+    statusDot.Size = UDim2.new(0, 12, 0, 12)
+    statusDot.Position = UDim2.new(0.1, 0, 0.5, -6)
+    statusDot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    statusDot.BorderSizePixel = 0
+    statusDot.Parent = statusFrame
+    
     local statusText = Instance.new("TextLabel")
-    statusText.Size = UDim2.new(1, 0, 1, 0)
+    statusText.Size = UDim2.new(0.8, 0, 1, 0)
+    statusText.Position = UDim2.new(0.25, 0, 0, 0)
     statusText.BackgroundTransparency = 1
-    statusText.Text = "⛔ DISABLED"
-    statusText.TextColor3 = Color3.fromRGB(255, 0, 0)
+    statusText.Text = "DISABLED"
+    statusText.TextColor3 = Color3.fromRGB(255, 80, 80)
     statusText.TextScaled = true
     statusText.Font = Enum.Font.GothamBold
+    statusText.TextXAlignment = Enum.TextXAlignment.Left
     statusText.Parent = statusFrame
     
-    -- Toggle button
-    local toggleBtn = Instance.new("TextButton")
-    toggleBtn.Size = UDim2.new(0.8, 0, 0, 40)
-    toggleBtn.Position = UDim2.new(0.1, 0, 0.15, 0)
-    toggleBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    toggleBtn.Text = "🔴 ENABLE AIMBOT"
-    toggleBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    toggleBtn.TextScaled = true
-    toggleBtn.Font = Enum.Font.GothamBold
-    toggleBtn.BorderSizePixel = 2
-    toggleBtn.BorderColor3 = Color3.fromRGB(200, 0, 0)
-    toggleBtn.Parent = mainFrame
+    -- AIMBOT TOGGLE SWITCH (Main switch)
+    local switchLabel = Instance.new("TextLabel")
+    switchLabel.Size = UDim2.new(0.4, 0, 0, 20)
+    switchLabel.Position = UDim2.new(0.55, 0, 0, 75)
+    switchLabel.BackgroundTransparency = 1
+    switchLabel.Text = "AIMBOT"
+    switchLabel.TextColor3 = Color3.fromRGB(140, 140, 170)
+    switchLabel.TextScaled = true
+    switchLabel.Font = Enum.Font.GothamBold
+    switchLabel.TextXAlignment = Enum.TextXAlignment.Right
+    switchLabel.Parent = mainFrame
     
-    -- Settings
+    -- Main toggle switch (modern design)
+    local switchFrame = Instance.new("Frame")
+    switchFrame.Size = UDim2.new(0, 60, 0, 30)
+    switchFrame.Position = UDim2.new(0.85, -30, 0, 100)
+    switchFrame.BackgroundColor3 = Color3.fromRGB(40, 40, 60)
+    switchFrame.BackgroundTransparency = 0.3
+    switchFrame.BorderSizePixel = 2
+    switchFrame.BorderColor3 = Color3.fromRGB(60, 60, 80)
+    switchFrame.Parent = mainFrame
+    
+    local switchBtn = Instance.new("TextButton")
+    switchBtn.Size = UDim2.new(0.45, 0, 0.8, 0)
+    switchBtn.Position = UDim2.new(0.03, 0, 0.1, 0)
+    switchBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    switchBtn.BackgroundTransparency = 0.1
+    switchBtn.Text = ""
+    switchBtn.BorderSizePixel = 0
+    switchBtn.Parent = switchFrame
+    
+    -- Switch text (ON/OFF)
+    local switchText = Instance.new("TextLabel")
+    switchText.Size = UDim2.new(0.5, 0, 1, 0)
+    switchText.Position = UDim2.new(0.55, 0, 0, 0)
+    switchText.BackgroundTransparency = 1
+    switchText.Text = "OFF"
+    switchText.TextColor3 = Color3.fromRGB(200, 100, 100)
+    switchText.TextScaled = true
+    switchText.Font = Enum.Font.GothamBold
+    switchText.TextXAlignment = Enum.TextXAlignment.Right
+    switchText.Parent = switchFrame
+    
+    -- Settings section title
+    local settingsTitle = Instance.new("TextLabel")
+    settingsTitle.Size = UDim2.new(1, 0, 0, 25)
+    settingsTitle.Position = UDim2.new(0, 0, 0, 145)
+    settingsTitle.BackgroundTransparency = 1
+    settingsTitle.Text = "⚙ SETTINGS"
+    settingsTitle.TextColor3 = Color3.fromRGB(140, 140, 170)
+    settingsTitle.TextScaled = true
+    settingsTitle.Font = Enum.Font.GothamBold
+    settingsTitle.Parent = mainFrame
+    
+    -- Setting items with toggle switches
     local settings = {
-        {"🎯 Smoothness", "90%"},
-        {"📏 FOV", "120°"},
-        {"🎯 Hit Chance", "99%"},
-        {"🔫 Auto Shoot", "ON"},
-        {"👀 Visible Check", "ON"},
-        {"📊 Prediction", "ON"}
+        {"Smoothness", "95%", true},
+        {"FOV Radius", "120°", true},
+        {"Hit Chance", "99%", true},
+        {"Auto Shoot", "ON", true},
+        {"Visible Check", "ON", true},
+        {"Prediction", "ON", true}
     }
     
+    local settingFrames = {}
     for i, setting in ipairs(settings) do
-        local yPos = 70 + (i-1) * 35
+        local yPos = 175 + (i-1) * 32
         
         local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(0.9, 0, 0, 25)
+        frame.Size = UDim2.new(0.9, 0, 0, 27)
         frame.Position = UDim2.new(0.05, 0, 0, yPos)
         frame.BackgroundTransparency = 0.5
-        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 50)
+        frame.BackgroundColor3 = Color3.fromRGB(20, 20, 35)
         frame.BorderSizePixel = 1
-        frame.BorderColor3 = Color3.fromRGB(100, 100, 150)
+        frame.BorderColor3 = Color3.fromRGB(40, 40, 70)
         frame.Parent = mainFrame
+        settingFrames[i] = frame
         
         local label = Instance.new("TextLabel")
-        label.Size = UDim2.new(0.6, 0, 1, 0)
-        label.Position = UDim2.new(0, 5, 0, 0)
+        label.Size = UDim2.new(0.5, 0, 1, 0)
+        label.Position = UDim2.new(0, 10, 0, 0)
         label.BackgroundTransparency = 1
         label.Text = setting[1]
-        label.TextColor3 = Color3.fromRGB(200, 200, 200)
+        label.TextColor3 = Color3.fromRGB(200, 200, 220)
         label.TextScaled = true
         label.Font = Enum.Font.Gotham
         label.TextXAlignment = Enum.TextXAlignment.Left
         label.Parent = frame
         
-        local value = Instance.new("TextLabel")
-        value.Size = UDim2.new(0.4, 0, 1, 0)
-        value.Position = UDim2.new(0.6, 0, 0, 0)
-        value.BackgroundTransparency = 1
-        value.Text = setting[2]
-        value.TextColor3 = Color3.fromRGB(0, 200, 255)
-        value.TextScaled = true
-        value.Font = Enum.Font.Gotham
-        value.TextXAlignment = Enum.TextXAlignment.Right
-        value.Parent = frame
+        local valueLabel = Instance.new("TextLabel")
+        valueLabel.Size = UDim2.new(0.25, 0, 1, 0)
+        valueLabel.Position = UDim2.new(0.55, 0, 0, 0)
+        valueLabel.BackgroundTransparency = 1
+        valueLabel.Text = setting[2]
+        valueLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+        valueLabel.TextScaled = true
+        valueLabel.Font = Enum.Font.Gotham
+        valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+        valueLabel.Parent = frame
+        
+        -- Small toggle switch
+        local smallSwitch = Instance.new("TextButton")
+        smallSwitch.Size = UDim2.new(0, 35, 0, 18)
+        smallSwitch.Position = UDim2.new(0.9, -40, 0.5, -9)
+        smallSwitch.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+        smallSwitch.BackgroundTransparency = 0.2
+        smallSwitch.Text = "ON"
+        smallSwitch.TextColor3 = Color3.fromRGB(255, 255, 255)
+        smallSwitch.TextScaled = true
+        smallSwitch.Font = Enum.Font.GothamBold
+        smallSwitch.BorderSizePixel = 0
+        smallSwitch.Parent = frame
+        
+        local isOn = true
+        smallSwitch.MouseButton1Click:Connect(function()
+            isOn = not isOn
+            if isOn then
+                smallSwitch.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+                smallSwitch.Text = "ON"
+                valueLabel.TextColor3 = Color3.fromRGB(0, 200, 255)
+            else
+                smallSwitch.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+                smallSwitch.Text = "OFF"
+                valueLabel.TextColor3 = Color3.fromRGB(255, 50, 50)
+            end
+        end)
     end
     
-    -- FOV circle (fake aim indicator)
+    -- Keybind indicator
+    local keybindFrame = Instance.new("Frame")
+    keybindFrame.Size = UDim2.new(0.9, 0, 0, 30)
+    keybindFrame.Position = UDim2.new(0.05, 0, 0, 425)
+    keybindFrame.BackgroundTransparency = 0.5
+    keybindFrame.BackgroundColor3 = Color3.fromRGB(15, 15, 30)
+    keybindFrame.BorderSizePixel = 1
+    keybindFrame.BorderColor3 = Color3.fromRGB(40, 40, 70)
+    keybindFrame.Parent = mainFrame
+    
+    local keybindLabel = Instance.new("TextLabel")
+    keybindLabel.Size = UDim2.new(1, 0, 1, 0)
+    keybindLabel.BackgroundTransparency = 1
+    keybindLabel.Text = "⌨ Press J to toggle GUI"
+    keybindLabel.TextColor3 = Color3.fromRGB(150, 150, 180)
+    keybindLabel.TextScaled = true
+    keybindLabel.Font = Enum.Font.Gotham
+    keybindLabel.Parent = keybindFrame
+    
+    -- FOV Circle (modern)
     local fovCircle = Instance.new("ImageLabel")
     fovCircle.Size = UDim2.new(0, 200, 0, 200)
     fovCircle.Position = UDim2.new(0.5, -100, 0.5, -100)
     fovCircle.BackgroundTransparency = 1
-    fovCircle.Image = "rbxassetid://6022854806" -- Circle image
+    fovCircle.Image = "rbxassetid://6022854806"
     fovCircle.ImageColor3 = Color3.fromRGB(0, 200, 255)
-    fovCircle.ImageTransparency = 0.7
+    fovCircle.ImageTransparency = 0.8
     fovCircle.Visible = false
     fovCircle.ZIndex = 999
     fovCircle.Parent = screenGui
     
-    -- Crosshair
-    local crosshair = Instance.new("Frame")
-    crosshair.Size = UDim2.new(0, 20, 0, 2)
-    crosshair.Position = UDim2.new(0.5, -10, 0.5, -1)
-    crosshair.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    crosshair.BackgroundTransparency = 0.5
-    crosshair.Parent = screenGui
+    -- Modern crosshair
+    local crosshairGroup = Instance.new("Frame")
+    crosshairGroup.Size = UDim2.new(0, 30, 0, 30)
+    crosshairGroup.Position = UDim2.new(0.5, -15, 0.5, -15)
+    crosshairGroup.BackgroundTransparency = 1
+    crosshairGroup.Parent = screenGui
     
-    local crosshair2 = Instance.new("Frame")
-    crosshair2.Size = UDim2.new(0, 2, 0, 20)
-    crosshair2.Position = UDim2.new(0.5, -1, 0.5, -10)
-    crosshair2.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-    crosshair2.BackgroundTransparency = 0.5
-    crosshair2.Parent = screenGui
+    local function createCrosshairPart(size, position, color)
+        local part = Instance.new("Frame")
+        part.Size = UDim2.new(0, size, 0, 2)
+        part.Position = UDim2.new(0.5, position, 0.5, -1)
+        part.BackgroundColor3 = color
+        part.BackgroundTransparency = 0.5
+        part.Parent = crosshairGroup
+        return part
+    end
     
-    -- Toggle functionality
-    toggleBtn.MouseButton1Click:Connect(function()
-        isFakeAimEnabled = not isFakeAimEnabled
-        
-        if isFakeAimEnabled then
-            toggleBtn.Text = "🟢 DISABLE AIMBOT"
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-            toggleBtn.BorderColor3 = Color3.fromRGB(0, 200, 0)
-            statusText.Text = "✅ ENABLED"
-            statusText.TextColor3 = Color3.fromRGB(0, 255, 0)
-            statusFrame.BackgroundColor3 = Color3.fromRGB(0, 50, 0)
-            fovCircle.Visible = true
-            crosshair.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            crosshair2.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            print("🎯 Silent Aim ENABLED - Watch them miss!")
+    -- Crosshair lines
+    local crosshairParts = {}
+    local colors = {
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(0, 255, 0),
+        Color3.fromRGB(0, 255, 0)
+    }
+    
+    -- Top, Bottom, Left, Right
+    local positions = {
+        {0, 0, 0, -10}, -- Top
+        {0, 0, 0, 8},   -- Bottom
+        {0, -10, 0, 0}, -- Left
+        {0, 8, 0, 0}    -- Right
+    }
+    
+    for i, pos in ipairs(positions) do
+        local part = Instance.new("Frame")
+        if i <= 2 then
+            part.Size = UDim2.new(0, 15, 0, 2)
+            part.Position = UDim2.new(0.5, -7, 0.5, pos[4])
         else
-            toggleBtn.Text = "🔴 ENABLE AIMBOT"
-            toggleBtn.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-            toggleBtn.BorderColor3 = Color3.fromRGB(200, 0, 0)
-            statusText.Text = "⛔ DISABLED"
-            statusText.TextColor3 = Color3.fromRGB(255, 0, 0)
-            statusFrame.BackgroundColor3 = Color3.fromRGB(50, 0, 0)
+            part.Size = UDim2.new(0, 2, 0, 15)
+            part.Position = UDim2.new(0.5, pos[3], 0.5, -7)
+        end
+        part.BackgroundColor3 = colors[i]
+        part.BackgroundTransparency = 0.5
+        part.Parent = crosshairGroup
+        table.insert(crosshairParts, part)
+    end
+    
+    -- Center dot
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.new(0, 4, 0, 4)
+    dot.Position = UDim2.new(0.5, -2, 0.5, -2)
+    dot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+    dot.BackgroundTransparency = 0.3
+    dot.Parent = crosshairGroup
+    
+    -- Main switch toggle function
+    local function toggleAimbot()
+        isEnabled = not isEnabled
+        
+        if isEnabled then
+            -- Update main switch
+            switchBtn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+            switchBtn.Position = UDim2.new(0.52, 0, 0.1, 0)
+            switchText.Text = "ON"
+            switchText.TextColor3 = Color3.fromRGB(100, 255, 100)
+            switchFrame.BorderColor3 = Color3.fromRGB(50, 200, 50)
+            
+            -- Update status
+            statusText.Text = "ENABLED"
+            statusText.TextColor3 = Color3.fromRGB(50, 255, 50)
+            statusFrame.BackgroundColor3 = Color3.fromRGB(10, 50, 10)
+            statusFrame.BorderColor3 = Color3.fromRGB(50, 200, 50)
+            statusDot.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+            
+            -- Show FOV circle
+            fovCircle.Visible = true
+            fovCircle.ImageTransparency = 0.6
+            
+            -- Change crosshair to red (aimbot mode)
+            for _, part in pairs(crosshairParts) do
+                part.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            end
+            dot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            
+            print("🎯 Silent Aim ENABLED - Prepare to miss everything!")
+        else
+            -- Update main switch
+            switchBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            switchBtn.Position = UDim2.new(0.03, 0, 0.1, 0)
+            switchText.Text = "OFF"
+            switchText.TextColor3 = Color3.fromRGB(200, 100, 100)
+            switchFrame.BorderColor3 = Color3.fromRGB(60, 60, 80)
+            
+            -- Update status
+            statusText.Text = "DISABLED"
+            statusText.TextColor3 = Color3.fromRGB(255, 80, 80)
+            statusFrame.BackgroundColor3 = Color3.fromRGB(40, 10, 10)
+            statusFrame.BorderColor3 = Color3.fromRGB(200, 50, 50)
+            statusDot.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+            
+            -- Hide FOV circle
             fovCircle.Visible = false
-            crosshair.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
-            crosshair2.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            
+            -- Change crosshair back to green
+            for _, part in pairs(crosshairParts) do
+                part.BackgroundColor3 = Color3.fromRGB(0, 255, 0)
+            end
+            dot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
+            
             print("🎯 Silent Aim DISABLED")
+        end
+    end
+    
+    -- Connect main switch click
+    switchBtn.MouseButton1Click:Connect(toggleAimbot)
+    
+    -- Also click on the switch frame to toggle
+    switchFrame.MouseButton1Click:Connect(toggleAimbot)
+    
+    -- J key to toggle GUI visibility
+    userInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        
+        if input.KeyCode == GUI_TOGGLE_KEY then
+            isGUIVisible = not isGUIVisible
+            mainFrame.Visible = isGUIVisible
+            if isGUIVisible then
+                print("🎯 GUI Visible")
+            else
+                print("🎯 GUI Hidden (Press J to show)")
+            end
         end
     end)
     
-    return screenGui
+    return screenGui, mainFrame, fovCircle, toggleAimbot
 end
 
--- Function to get nearest player (but we'll make it miss)
+-- Initialize GUI
+local gui, mainFrame, fovCircle, toggleAimbot = createModernGUI()
+
+-- Function to get nearest player (for fake targeting)
 local function getNearestPlayer()
     local nearest = nil
     local shortestDist = math.huge
@@ -184,6 +440,7 @@ local function getNearestPlayer()
         if otherPlayer ~= player and otherPlayer.Character then
             local otherRoot = otherPlayer.Character:FindFirstChild("HumanoidRootPart")
             if otherRoot then
+                local mouse = player:GetMouse()
                 local distance = (otherRoot.Position - mouse.Hit.Position).Magnitude
                 if distance < shortestDist then
                     shortestDist = distance
@@ -196,89 +453,46 @@ local function getNearestPlayer()
     return nearest
 end
 
--- Function that makes bullets miss (REVERSE AIMBOT)
-local function makeBulletsMiss()
-    if not isFakeAimEnabled then return end
-    
-    -- Get a target
-    local targetPlayer = getNearestPlayer()
-    if not targetPlayer or not targetPlayer.Character then return end
-    
-    local targetRoot = targetPlayer.Character:FindFirstChild("HumanoidRootPart")
-    if not targetRoot then return end
-    
-    -- Calculate where the bullet WOULD go (away from target)
-    local targetPos = targetRoot.Position
-    local myPos = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    
-    if myPos then
-        -- Calculate direction AWAY from target
-        local awayDirection = (myPos.Position - targetPos).Unit
-        
-        -- Random offset to make it look natural
-        local randomOffset = Vector3.new(
-            math.random(-20, 20),
-            math.random(-10, 10),
-            math.random(-20, 20)
-        )
-        
-        -- Set mouse to look AWAY from target
-        local aimPos = targetPos + awayDirection * 50 + randomOffset
-        
-        -- Update mouse position (silently)
-        -- Note: We can't actually move the mouse, but we can affect where bullets go
-        -- This is done by intercepting the mouse hit
-        
-        -- Make the bullet trajectory miss
-        local fakeHit = {
-            Position = aimPos,
-            Unit = awayDirection
-        }
-        
-        return fakeHit
-    end
-    
-    return nil
-end
-
--- Intercept bullet creation and make it miss
-local function interceptBullet()
+-- Hook into bullet remote events to make them miss
+local function interceptBullets()
     local replicatedStorage = game:GetService("ReplicatedStorage")
     
-    -- Find bullet remote events (common names)
-    local remoteEvents = {
-        replicatedStorage:FindFirstChild("FireBullet"),
-        replicatedStorage:FindFirstChild("Shoot"),
-        replicatedStorage:FindFirstChild("WeaponShoot"),
-        replicatedStorage:FindFirstChild("BulletFired"),
-        game:GetService("ReplicatedStorage"):FindFirstChild("RemoteEvent")
+    -- Common remote event names for weapons
+    local remoteNames = {
+        "FireBullet", "Shoot", "WeaponShoot", "BulletFired",
+        "RemoteEvent", "ToolEvent", "WeaponRemote", "GunFire",
+        "Fire", "ShootEvent", "FireWeapon", "GunRemote"
     }
     
-    for _, remote in pairs(remoteEvents) do
+    for _, name in pairs(remoteNames) do
+        local remote = replicatedStorage:FindFirstChild(name)
         if remote then
-            -- Hook the remote to modify bullet data
             local oldFire = remote.FireServer
             remote.FireServer = function(...)
                 local args = {...}
                 
-                if isFakeAimEnabled then
-                    -- Modify bullet direction to miss
+                if isEnabled then
                     local target = getNearestPlayer()
                     if target and target.Character then
                         local targetRoot = target.Character:FindFirstChild("HumanoidRootPart")
                         if targetRoot then
-                            -- Calculate a position BEHIND the target (always miss)
-                            local behindPos = targetRoot.Position - (targetRoot.CFrame.LookVector * 5)
-                            local offset = Vector3.new(
-                                math.random(-15, 15),
-                                math.random(-10, 10),
-                                math.random(-15, 15)
-                            )
-                            -- Replace the aim position with a miss
-                            if args[1] and type(args[1]) == "Vector3" then
-                                args[1] = behindPos + offset
-                            elseif args[2] and type(args[2]) == "Vector3" then
-                                args[2] = behindPos + offset
+                            -- Calculate position AWAY from target
+                            local myPos = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                            if myPos then
+                                local awayDir = (myPos.Position - targetRoot.Position).Unit
+                                local missOffset = Vector3.new(
+                                    math.random(-30, 30),
+                                    math.random(-20, 20),
+                                    math.random(-30, 30)
+                                )
+                                local aimPos = targetRoot.Position + awayDir * 50 + missOffset
+                                
+                                -- Replace the aim position with a miss
+                                if args[1] and type(args[1]) == "Vector3" then
+                                    args[1] = aimPos
+                                elseif args[2] and type(args[2]) == "Vector3" then
+                                    args[2] = aimPos
+                                end
                             end
                         end
                     end
@@ -290,159 +504,32 @@ local function interceptBullet()
     end
 end
 
--- Function to show fake "hit markers" (even though they miss)
-local function createFakeHitMarker()
-    local hitMarker = Instance.new("Frame")
-    hitMarker.Size = UDim2.new(0, 50, 0, 50)
-    hitMarker.Position = UDim2.new(0.5, -25, 0.5, -25)
-    hitMarker.BackgroundTransparency = 1
-    hitMarker.ZIndex = 1000
-    hitMarker.Parent = player.PlayerGui
-    
-    local hitX = Instance.new("Frame")
-    hitX.Size = UDim2.new(1, 0, 0.05, 0)
-    hitX.Position = UDim2.new(0, 0, 0.475, 0)
-    hitX.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    hitX.BackgroundTransparency = 0.5
-    hitX.Parent = hitMarker
-    
-    local hitY = Instance.new("Frame")
-    hitY.Size = UDim2.new(0.05, 0, 1, 0)
-    hitY.Position = UDim2.new(0.475, 0, 0, 0)
-    hitY.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    hitY.BackgroundTransparency = 0.5
-    hitY.Parent = hitMarker
-    
-    -- Animate and destroy
-    spawn(function()
-        for i = 1, 20 do
-            hitMarker.Size = UDim2.new(0, 50 + i*2, 0, 50 + i*2)
-            hitMarker.Position = UDim2.new(0.5, -25 - i, 0.5, -25 - i)
-            hitX.BackgroundTransparency = 0.5 + (i/20) * 0.5
-            hitY.BackgroundTransparency = 0.5 + (i/20) * 0.5
-            task.wait(0.05)
+-- Make FOV circle pulse when enabled
+local function animateFOV()
+    while true do
+        if isEnabled and fovCircle then
+            local pulse = math.sin(tick() * 3) * 0.1 + 0.6
+            fovCircle.ImageTransparency = pulse
+            fovCircle.ImageColor3 = Color3.fromRGB(
+                0,
+                math.floor(200 + math.sin(tick() * 2) * 55),
+                math.floor(255 + math.sin(tick() * 2.5) * 55)
+            )
         end
-        hitMarker:Destroy()
-    end)
-end
-
--- Create fake "headshot" popups
-local function createFakeHeadshot()
-    local headshot = Instance.new("TextLabel")
-    headshot.Size = UDim2.new(0.3, 0, 0.1, 0)
-    headshot.Position = UDim2.new(0.35, 0, 0.5, -50)
-    headshot.BackgroundTransparency = 0.3
-    headshot.BackgroundColor3 = Color3.fromRGB(255, 0, 0)
-    headshot.Text = "💀 HEADSHOT! 💀"
-    headshot.TextColor3 = Color3.fromRGB(255, 255, 255)
-    headshot.TextScaled = true
-    headshot.Font = Enum.Font.GothamBold
-    headshot.Parent = player.PlayerGui
-    
-    spawn(function()
-        for i = 1, 30 do
-            headshot.Position = UDim2.new(0.35, 0, 0.5 - i*0.002, -50)
-            headshot.BackgroundTransparency = 0.3 + (i/30) * 0.7
-            task.wait(0.05)
-        end
-        headshot:Destroy()
-    end)
-end
-
--- Hook into damage system to create fake hits
-local function hookDamageEvents()
-    -- Watch for any damage events and create fake hit markers
-    local players = game:GetService("Players")
-    
-    -- Monitor humanoids for damage
-    for _, otherPlayer in pairs(players:GetPlayers()) do
-        if otherPlayer ~= player and otherPlayer.Character then
-            local humanoid = otherPlayer.Character:FindFirstChild("Humanoid")
-            if humanoid then
-                humanoid.HealthChanged:Connect(function(health)
-                    if isFakeAimEnabled and health < humanoid.MaxHealth then
-                        -- This gives the illusion that they're hitting
-                        createFakeHitMarker()
-                        if math.random(1, 4) == 1 then
-                            createFakeHeadshot()
-                        end
-                    end
-                end)
-            end
-        end
+        task.wait(0.05)
     end
 end
 
--- Create fake kill counter
-local killCounter = 0
-local function createKillCounter()
-    local killFrame = Instance.new("Frame")
-    killFrame.Size = UDim2.new(0, 150, 0, 50)
-    killFrame.Position = UDim2.new(0.01, 0, 0.05, 0)
-    killFrame.BackgroundTransparency = 0.3
-    killFrame.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    killFrame.BorderSizePixel = 2
-    killFrame.BorderColor3 = Color3.fromRGB(255, 0, 0)
-    killFrame.Parent = player.PlayerGui
-    
-    local killText = Instance.new("TextLabel")
-    killText.Size = UDim2.new(1, 0, 1, 0)
-    killText.BackgroundTransparency = 1
-    killText.Text = "KILLS: 0"
-    killText.TextColor3 = Color3.fromRGB(255, 0, 0)
-    killText.TextScaled = true
-    killText.Font = Enum.Font.GothamBold
-    killText.Parent = killFrame
-    
-    -- Increment kills randomly (fake)
-    spawn(function()
-        while true do
-            if isFakeAimEnabled and math.random(1, 3) == 1 then
-                killCounter = killCounter + math.random(1, 3)
-                killText.Text = "KILLS: " .. killCounter
-                killText.TextColor3 = Color3.fromRGB(0, 255, 0)
-                task.wait(0.1)
-                killText.TextColor3 = Color3.fromRGB(255, 0, 0)
-                print("🎯 Fake kill count: " .. killCounter)
-            end
-            task.wait(2)
-        end
-    end)
-end
-
 -- Initialize
-print("🎯 FAKE SILENT AIM LOADED!")
-print("🎯 This will make every bullet miss!")
-print("🎯 They'll think they're getting kills but they're not!")
-
--- Create GUI
-createGUI()
+print("🎯 MODERN FAKE SILENT AIM LOADED")
+print("🎯 Premium Edition v4.2")
+print("🎯 Press J to toggle GUI visibility")
+print("🎯 Use the switch inside the GUI to toggle aimbot")
+print("🎯 Every shot will miss the target!")
 
 -- Setup interceptors
 task.wait(1)
-interceptBullet()
-hookDamageEvents()
-createKillCounter()
+interceptBullets()
 
--- Fake "perfect aim" notification that does nothing
-local function showFakeNotification()
-    local notification = Instance.new("TextLabel")
-    notification.Size = UDim2.new(0.4, 0, 0.1, 0)
-    notification.Position = UDim2.new(0.3, 0, 0.85, 0)
-    notification.BackgroundTransparency = 0.3
-    notification.BackgroundColor3 = Color3.fromRGB(0, 200, 0)
-    notification.Text = "🎯 AIMBOT CALIBRATED 100%"
-    notification.TextColor3 = Color3.fromRGB(255, 255, 255)
-    notification.TextScaled = true
-    notification.Font = Enum.Font.GothamBold
-    notification.Parent = player.PlayerGui
-    
-    task.wait(3)
-    notification:Destroy()
-end
-
-showFakeNotification()
-
-print("🎯 Fake Silent Aim ready!")
-print("🎯 Every shot will miss the target!")
-print("🎯 They'll never know what hit them... because nothing will!")
+-- Start animations
+s
